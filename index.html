@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trustland - The Labyrinth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg: #000000;
+            --text: #ffffff;
+            --apple-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+            --transition-sleek: cubic-bezier(0.2, 1, 0.2, 1);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--apple-font);
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+            width: 100vw;
+            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+
+        #game-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            transition: opacity 3s var(--transition-sleek), filter 3s var(--transition-sleek);
+        }
+
+        /* Narrative Overlays */
+        #ui-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .content-block {
+            opacity: 0;
+            filter: blur(20px);
+            transform: translateY(20px);
+            transition: all 1.2s var(--transition-sleek);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .content-block.visible {
+            opacity: 1;
+            filter: blur(0);
+            transform: translateY(0);
+        }
+
+        /* Typography */
+        .label {
+            font-weight: 200;
+            letter-spacing: 0.5em;
+            color: #444;
+            font-size: 0.45rem;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .truth {
+            font-size: 1rem;
+            line-height: 2;
+            font-weight: 200;
+            letter-spacing: 0.02em;
+        }
+
+        @media (min-width: 768px) {
+            .truth { font-size: 1.15rem; }
+            .label { font-size: 0.55rem; letter-spacing: 0.7em; }
+        }
+
+        .italic-serif {
+            font-family: serif;
+            font-style: italic;
+            color: #777;
+            margin-top: 2rem;
+            display: block;
+            font-size: 0.85rem;
+        }
+
+        /* HUD - Mobile Friendly */
+        #nav-bar {
+            position: fixed;
+            top: 25px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            z-index: 1000;
+            padding: 0 10px;
+        }
+
+        .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            transition: all 0.5s ease;
+            cursor: pointer;
+        }
+
+        .dot.active { background: #fff; box-shadow: 0 0 10px #fff; transform: scale(1.4); }
+        .dot.found { background: #444; }
+
+        /* Intro Screen */
+        #intro {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            transition: opacity 2s ease;
+        }
+
+        .start-btn {
+            margin-top: 50px;
+            padding: 12px 35px;
+            border: 1px solid #222;
+            font-size: 0.55rem;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            color: #444;
+            background: transparent;
+        }
+
+        /* Final Door Perspective */
+        #final-door {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) perspective(600px) rotateY(-35deg);
+            width: 55px;
+            height: 85px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: linear-gradient(90deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 4s var(--transition-sleek);
+            pointer-events: none;
+            box-shadow: 15px 0 40px rgba(255,255,255,0.02);
+        }
+
+        .is-home #final-door { opacity: 1; }
+        .is-home #game-canvas { opacity: 0.4; filter: blur(15px); }
+
+        #hint {
+            position: fixed;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.45rem;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: #222;
+            z-index: 100;
+            pointer-events: none;
+            transition: opacity 1s;
+        }
+
+        .reading #hint { opacity: 0; }
+        .is-home #hint { display: none; }
+
+        .grain {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 500;
+            opacity: 0.04;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body>
+
+    <div id="intro">
+        <h1 class="text-2xl md:text-3xl font-extralight tracking-[0.3em] mb-4 uppercase italic font-serif">TRUSTLAND</h1>
+        <p class="label">To Christian James Daley</p>
+        <p class="text-[0.6rem] uppercase tracking-[0.4em] text-neutral-600 max-w-[280px] leading-relaxed mt-6">
+            retrieve fragments of my memory
+        </p>
+        <button class="start-btn" onclick="startJourney()">Step In</button>
+    </div>
+
+    <div id="nav-bar"></div>
+    <div id="hint">Hold to move your light</div>
+
+    <div class="grain"></div>
+    <div id="final-door"></div>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="content" class="content-block">
+            <span class="label" id="chapter-label"></span>
+            <p class="truth" id="chapter-text"></p>
+            <span class="italic-serif" id="chapter-sub"></span>
+        </div>
+    </div>
+
+    <script>
+        const story = [
+            { label: "Prologue", text: "Trust didn’t arrive loudly. It arrived gently, the way morning light enters a room.", sub: "Every word found its home because of you.", pos: {x: 0.2, y: 0.2} },
+            { label: "Depth", text: "Before you, I lived as though every feeling arrived carrying a history of its own.", sub: "Depth was simply how I existed.", pos: {x: 0.8, y: 0.2} },
+            { label: "Steadiness", text: "You remained present in the small moments, the ordinary ones that usually made people drift.", sub: "Not everyone leaves.", pos: {x: 0.8, y: 0.8} },
+            { label: "Wisdom", text: "Your freedom is not distance. It is wisdom. Watching you protect it has taught me how powerful it is.", sub: "Becoming takes time.", pos: {x: 0.2, y: 0.8} },
+            { label: "Guarded", text: "Your door opens when you feel safe. It takes courage to guard your inner world in a world that pushes speed.", sub: "Discernment is care.", pos: {x: 0.5, y: 0.5} },
+            { label: "Encounter", text: "There you are. <br> I have been looking for you.", sub: "Wait for the silence to settle.", pos: {x: 0.8, y: 0.5} },
+            { label: "Coming Home", text: "If my eyes could speak about you, they would say you are the compass the heart traces — steady, certain, always pointing home.", sub: "Some truths are too heavy for words.", pos: {x: 0.5, y: 0.8} },
+            { label: "Rest Here", text: "“And if the world ever becomes too loud, remember — there was once a heart that learned how to breathe because of you.”", sub: "Rest here.", pos: {x: 0.5, y: 0.2} }
+        ];
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const body = document.body;
+        
+        let gameState = 'intro';
+        let player = { x: 0, y: 0, targetX: 0, targetY: 0, radius: 140 };
+        let fragmentsFound = [];
+        let isTouching = false;
+
+        // Maze Geometry (Normalized coordinates 0-1)
+        const walls = [
+            {x: 0.1, y: 0.3, w: 0.3, h: 0.01},
+            {x: 0.5, y: 0.1, w: 0.01, h: 0.4},
+            {x: 0.6, y: 0.6, w: 0.3, h: 0.01},
+            {x: 0.3, y: 0.6, w: 0.01, h: 0.3},
+            {x: 0.1, y: 0.7, w: 0.2, h: 0.01},
+            {x: 0.7, y: 0.3, w: 0.01, h: 0.2},
+            {x: 0.4, y: 0.4, w: 0.2, h: 0.01}
+        ];
+
+        function init() {
+            resize();
+            createHUD();
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            player.targetX = player.x;
+            player.targetY = player.y;
+            animate();
+        }
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+            ctx.scale(dpr, dpr);
+        }
+
+        function createHUD() {
+            const nav = document.getElementById('nav-bar');
+            story.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.id = `dot-${i}`;
+                dot.addEventListener('click', () => {
+                    if (gameState === 'playing') teleportTo(i);
+                });
+                nav.appendChild(dot);
+            });
+        }
+
+        function teleportTo(index) {
+            const target = story[index];
+            player.targetX = target.pos.x * window.innerWidth;
+            player.targetY = target.pos.y * window.innerHeight;
+        }
+
+        function startJourney() {
+            document.getElementById('intro').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('intro').style.display = 'none';
+                gameState = 'playing';
+            }, 1000);
+        }
+
+        function showFragment(index) {
+            if (fragmentsFound.includes(index)) return;
+            
+            gameState = 'reading';
+            body.classList.add('reading');
+            const data = story[index];
+            document.getElementById('chapter-label').innerText = data.label;
+            document.getElementById('chapter-text').innerHTML = data.text;
+            document.getElementById('chapter-sub').innerText = data.sub;
+            
+            document.getElementById('content').classList.add('visible');
+            document.getElementById(`dot-${index}`).classList.add('found');
+            document.getElementById(`dot-${index}`).classList.remove('active');
+
+            const displayTime = index === story.length - 1 ? 9999999 : 5500;
+
+            setTimeout(() => {
+                if (index === story.length - 1) return; // Keep final step visible
+                document.getElementById('content').classList.remove('visible');
+                fragmentsFound.push(index);
+                
+                if (fragmentsFound.length === story.length) {
+                    gameState = 'home';
+                    body.classList.add('is-home');
+                } else {
+                    gameState = 'playing';
+                    body.classList.remove('reading');
+                }
+            }, displayTime);
+        }
+
+        // Touch/Mouse Events
+        const handleDown = (e) => {
+            if (gameState !== 'playing') return;
+            isTouching = true;
+            updateTarget(e);
+        };
+        const handleMove = (e) => {
+            if (isTouching) updateTarget(e);
+        };
+        const handleUp = () => {
+            isTouching = false;
+        };
+
+        function updateTarget(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            player.targetX = clientX;
+            player.targetY = clientY;
+        }
+
+        window.addEventListener('mousedown', handleDown);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleDown(e); }, {passive: false});
+        window.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
+        window.addEventListener('touchend', handleUp);
+
+        function animate() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+
+            if (gameState !== 'intro') {
+                // Smooth Movement
+                player.x += (player.targetX - player.x) * 0.06;
+                player.y += (player.targetY - player.y) * 0.06;
+
+                // 1. Draw Light Source (Player)
+                const grad = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius);
+                grad.addColorStop(0, 'rgba(255,255,255,0.12)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, w, h);
+
+                // 2. Draw Core
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+
+                // 3. Draw Maze Walls (Only visible near player)
+                if (gameState !== 'home') {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+                    ctx.lineWidth = 0.5;
+                    walls.forEach(wall => {
+                        const wx = wall.x * w;
+                        const wy = wall.y * h;
+                        const ww = wall.w * w;
+                        const wh = wall.h * h;
+                        
+                        // Only draw if wall is within light range
+                        const centerX = wx + ww/2;
+                        const centerY = wy + wh/2;
+                        const dist = Math.hypot(player.x - centerX, player.y - centerY);
+                        if (dist < player.radius + 100) {
+                            ctx.strokeRect(wx, wy, ww, wh);
+                        }
+                    });
+                }
+
+                // 4. Draw Memory Echoes
+                story.forEach((s, i) => {
+                    if (fragmentsFound.includes(i)) return;
+                    
+                    const ex = s.pos.x * w;
+                    const ey = s.pos.y * h;
+                    const dist = Math.hypot(player.x - ex, player.y - ey);
+                    
+                    // Pulse Effect
+                    const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
+                    ctx.beginPath();
+                    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255,255,255,${0.05 + pulse * 0.15})`;
+                    ctx.fill();
+
+                    // Collision detection
+                    if (dist < 25 && gameState === 'playing' && i === fragmentsFound.length) {
+                        showFragment(i);
+                    }
+                    
+                    // HUD Update
+                    if (i === fragmentsFound.length) {
+                        const dot = document.getElementById(`dot-${i}`);
+                        if (dot) dot.classList.add('active');
+                    }
+                });
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        init();
+
+    </script>
+</body>
+</html>
