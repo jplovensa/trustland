@@ -44,7 +44,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 30px;
+            padding: 24px;
             text-align: center;
         }
 
@@ -65,10 +65,10 @@
 
         /* Typography */
         .label {
-            font-weight: 200;
+            font-weight: 300;
             letter-spacing: 0.5em;
-            color: #444;
-            font-size: 0.45rem;
+            color: #555;
+            font-size: 0.5rem;
             text-transform: uppercase;
             margin-bottom: 20px;
             display: block;
@@ -76,26 +76,26 @@
 
         .truth {
             font-size: 1rem;
-            line-height: 2;
+            line-height: 1.8;
             font-weight: 200;
             letter-spacing: 0.02em;
         }
 
         @media (min-width: 768px) {
-            .truth { font-size: 1.15rem; }
-            .label { font-size: 0.55rem; letter-spacing: 0.7em; }
+            .truth { font-size: 1.25rem; line-height: 2.2; }
+            .label { font-size: 0.6rem; letter-spacing: 0.7em; }
         }
 
         .italic-serif {
             font-family: serif;
             font-style: italic;
-            color: #777;
-            margin-top: 2rem;
+            color: #888;
+            margin-top: 1.5rem;
             display: block;
             font-size: 0.85rem;
         }
 
-        /* HUD - Mobile Friendly */
+        /* HUD - Mobile Optimized Hitboxes */
         #nav-bar {
             position: fixed;
             top: 25px;
@@ -103,21 +103,30 @@
             right: 0;
             display: flex;
             justify-content: center;
-            gap: 6px;
+            gap: 12px;
             z-index: 1000;
-            padding: 0 10px;
+            padding: 10px;
+            pointer-events: auto;
         }
 
         .dot {
-            width: 5px;
-            height: 5px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: #1a1a1a;
+            background: #222;
             transition: all 0.5s ease;
             cursor: pointer;
+            position: relative;
         }
 
-        .dot.active { background: #fff; box-shadow: 0 0 10px #fff; transform: scale(1.4); }
+        /* Increase touch area for dots */
+        .dot::after {
+            content: '';
+            position: absolute;
+            inset: -12px;
+        }
+
+        .dot.active { background: #fff; box-shadow: 0 0 12px #fff; transform: scale(1.4); }
         .dot.found { background: #444; }
 
         /* Intro Screen */
@@ -131,19 +140,25 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 40px;
+            padding: 30px;
             transition: opacity 2s ease;
         }
 
         .start-btn {
-            margin-top: 50px;
-            padding: 12px 35px;
-            border: 1px solid #222;
+            margin-top: 40px;
+            padding: 14px 38px;
+            border: 1px solid #333;
             font-size: 0.55rem;
             letter-spacing: 0.5em;
             text-transform: uppercase;
-            color: #444;
+            color: #666;
             background: transparent;
+            transition: color 0.3s, border-color 0.3s;
+        }
+        
+        .start-btn:active {
+            color: #fff;
+            border-color: #fff;
         }
 
         /* Final Door Perspective */
@@ -151,20 +166,20 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) perspective(600px) rotateY(-35deg);
+            transform: translate(-50%, -50%) perspective(800px) rotateY(-35deg);
             width: 55px;
-            height: 85px;
+            height: 90px;
             border: 1px solid rgba(255,255,255,0.12);
             background: linear-gradient(90deg, rgba(255,255,255,0.06) 0%, transparent 100%);
             z-index: 5;
             opacity: 0;
             transition: opacity 4s var(--transition-sleek);
             pointer-events: none;
-            box-shadow: 15px 0 40px rgba(255,255,255,0.02);
+            box-shadow: 15px 0 45px rgba(255,255,255,0.02);
         }
 
         .is-home #final-door { opacity: 1; }
-        .is-home #game-canvas { opacity: 0.4; filter: blur(15px); }
+        .is-home #game-canvas { opacity: 0.4; filter: blur(20px); }
 
         #hint {
             position: fixed;
@@ -236,48 +251,55 @@
         const body = document.body;
         
         let gameState = 'intro';
-        let player = { x: 0, y: 0, targetX: 0, targetY: 0, radius: 140 };
+        let player = { x: 0, y: 0, targetX: 0, targetY: 0, radius: 150 };
         let fragmentsFound = [];
         let isTouching = false;
+        let dpr = 1;
 
-        // Maze Geometry (Normalized coordinates 0-1)
+        // Maze Geometry (Normalized)
         const walls = [
-            {x: 0.1, y: 0.3, w: 0.3, h: 0.01},
-            {x: 0.5, y: 0.1, w: 0.01, h: 0.4},
-            {x: 0.6, y: 0.6, w: 0.3, h: 0.01},
-            {x: 0.3, y: 0.6, w: 0.01, h: 0.3},
-            {x: 0.1, y: 0.7, w: 0.2, h: 0.01},
-            {x: 0.7, y: 0.3, w: 0.01, h: 0.2},
-            {x: 0.4, y: 0.4, w: 0.2, h: 0.01}
+            {x: 0.1, y: 0.35, w: 0.35, h: 0.005},
+            {x: 0.5, y: 0.1, w: 0.005, h: 0.4},
+            {x: 0.6, y: 0.65, w: 0.3, h: 0.005},
+            {x: 0.3, y: 0.65, w: 0.005, h: 0.25},
+            {x: 0.1, y: 0.75, w: 0.25, h: 0.005},
+            {x: 0.75, y: 0.3, w: 0.005, h: 0.25},
+            {x: 0.4, y: 0.45, w: 0.2, h: 0.005}
         ];
 
         function init() {
             resize();
             createHUD();
-            player.x = canvas.width / 2;
-            player.y = canvas.height / 2;
+            player.x = window.innerWidth / 2;
+            player.y = window.innerHeight / 2;
             player.targetX = player.x;
             player.targetY = player.y;
             animate();
         }
 
         function resize() {
-            const dpr = window.devicePixelRatio || 1;
+            dpr = window.devicePixelRatio || 1;
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             canvas.style.width = window.innerWidth + 'px';
             canvas.style.height = window.innerHeight + 'px';
             ctx.scale(dpr, dpr);
+            
+            // Adjust player target if it was near an edge
+            player.targetX = Math.min(player.targetX, window.innerWidth);
+            player.targetY = Math.min(player.targetY, window.innerHeight);
         }
 
         function createHUD() {
             const nav = document.getElementById('nav-bar');
+            nav.innerHTML = '';
             story.forEach((_, i) => {
                 const dot = document.createElement('div');
                 dot.className = 'dot';
                 dot.id = `dot-${i}`;
-                dot.addEventListener('click', () => {
-                    if (gameState === 'playing') teleportTo(i);
+                dot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (gameState === 'playing' || gameState === 'reading') teleportTo(i);
                 });
                 nav.appendChild(dot);
             });
@@ -287,6 +309,13 @@
             const target = story[index];
             player.targetX = target.pos.x * window.innerWidth;
             player.targetY = target.pos.y * window.innerHeight;
+            
+            // Force reset if was reading
+            if (gameState === 'reading') {
+                document.getElementById('content').classList.remove('visible');
+                body.classList.remove('reading');
+                gameState = 'playing';
+            }
         }
 
         function startJourney() {
@@ -311,10 +340,11 @@
             document.getElementById(`dot-${index}`).classList.add('found');
             document.getElementById(`dot-${index}`).classList.remove('active');
 
-            const displayTime = index === story.length - 1 ? 9999999 : 5500;
+            const isFinal = index === story.length - 1;
+            const displayTime = isFinal ? 9999999 : 6000;
 
             setTimeout(() => {
-                if (index === story.length - 1) return; // Keep final step visible
+                if (isFinal) return;
                 document.getElementById('content').classList.remove('visible');
                 fragmentsFound.push(index);
                 
@@ -328,7 +358,6 @@
             }, displayTime);
         }
 
-        // Touch/Mouse Events
         const handleDown = (e) => {
             if (gameState !== 'playing') return;
             isTouching = true;
@@ -351,8 +380,15 @@
         window.addEventListener('mousedown', handleDown);
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
-        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleDown(e); }, {passive: false});
-        window.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
+        window.addEventListener('touchstart', (e) => { 
+            if (e.target.closest('#nav-bar')) return;
+            e.preventDefault(); 
+            handleDown(e); 
+        }, {passive: false});
+        window.addEventListener('touchmove', (e) => { 
+            e.preventDefault(); 
+            handleMove(e); 
+        }, {passive: false});
         window.addEventListener('touchend', handleUp);
 
         function animate() {
@@ -364,26 +400,22 @@
             ctx.fillRect(0, 0, w, h);
 
             if (gameState !== 'intro') {
-                // Smooth Movement
-                player.x += (player.targetX - player.x) * 0.06;
-                player.y += (player.targetY - player.y) * 0.06;
+                player.x += (player.targetX - player.x) * 0.08;
+                player.y += (player.targetY - player.y) * 0.08;
 
-                // 1. Draw Light Source (Player)
                 const grad = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.radius);
-                grad.addColorStop(0, 'rgba(255,255,255,0.12)');
+                grad.addColorStop(0, 'rgba(255,255,255,0.14)');
                 grad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = grad;
                 ctx.fillRect(0, 0, w, h);
 
-                // 2. Draw Core
                 ctx.beginPath();
-                ctx.arc(player.x, player.y, 1.5, 0, Math.PI * 2);
+                ctx.arc(player.x, player.y, 2, 0, Math.PI * 2);
                 ctx.fillStyle = '#fff';
                 ctx.fill();
 
-                // 3. Draw Maze Walls (Only visible near player)
                 if (gameState !== 'home') {
-                    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+                    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
                     ctx.lineWidth = 0.5;
                     walls.forEach(wall => {
                         const wx = wall.x * w;
@@ -391,17 +423,15 @@
                         const ww = wall.w * w;
                         const wh = wall.h * h;
                         
-                        // Only draw if wall is within light range
                         const centerX = wx + ww/2;
                         const centerY = wy + wh/2;
                         const dist = Math.hypot(player.x - centerX, player.y - centerY);
-                        if (dist < player.radius + 100) {
+                        if (dist < player.radius + 150) {
                             ctx.strokeRect(wx, wy, ww, wh);
                         }
                     });
                 }
 
-                // 4. Draw Memory Echoes
                 story.forEach((s, i) => {
                     if (fragmentsFound.includes(i)) return;
                     
@@ -409,19 +439,18 @@
                     const ey = s.pos.y * h;
                     const dist = Math.hypot(player.x - ex, player.y - ey);
                     
-                    // Pulse Effect
                     const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
                     ctx.beginPath();
                     ctx.arc(ex, ey, 3, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(255,255,255,${0.05 + pulse * 0.15})`;
+                    ctx.fillStyle = `rgba(255,255,255,${0.05 + pulse * 0.2})`;
                     ctx.fill();
 
-                    // Collision detection
-                    if (dist < 25 && gameState === 'playing' && i === fragmentsFound.length) {
+                    // Collision (Mobile friendly radius)
+                    const hitRadius = window.innerWidth < 768 ? 35 : 25;
+                    if (dist < hitRadius && gameState === 'playing' && i === fragmentsFound.length) {
                         showFragment(i);
                     }
                     
-                    // HUD Update
                     if (i === fragmentsFound.length) {
                         const dot = document.getElementById(`dot-${i}`);
                         if (dot) dot.classList.add('active');
