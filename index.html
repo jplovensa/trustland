@@ -32,7 +32,7 @@
             position: fixed;
             inset: 0;
             z-index: 10;
-            transition: opacity 3s var(--transition-sleek), filter 3s var(--transition-sleek);
+            transition: opacity 2s var(--transition-sleek);
         }
 
         /* Narrative Overlays */
@@ -44,7 +44,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 30px;
             text-align: center;
         }
 
@@ -52,7 +52,7 @@
             opacity: 0;
             filter: blur(20px);
             transform: translateY(20px);
-            transition: all 1.2s var(--transition-sleek);
+            transition: all 1s var(--transition-sleek);
             max-width: 500px;
             width: 100%;
         }
@@ -82,7 +82,7 @@
         }
 
         @media (min-width: 768px) {
-            .truth { font-size: 1.25rem; line-height: 2.2; }
+            .truth { font-size: 1.2rem; line-height: 2.1; }
             .label { font-size: 0.6rem; letter-spacing: 0.7em; }
         }
 
@@ -95,7 +95,7 @@
             font-size: 0.85rem;
         }
 
-        /* HUD - Mobile Optimized Hitboxes */
+        /* HUD - Nav bar remains clickable */
         #nav-bar {
             position: fixed;
             top: 25px;
@@ -105,13 +105,13 @@
             justify-content: center;
             gap: 12px;
             z-index: 1000;
-            padding: 10px;
+            padding: 15px;
             pointer-events: auto;
         }
 
         .dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: #222;
             transition: all 0.5s ease;
@@ -119,17 +119,15 @@
             position: relative;
         }
 
-        /* Increase touch area for dots */
         .dot::after {
             content: '';
             position: absolute;
             inset: -12px;
         }
 
-        .dot.active { background: #fff; box-shadow: 0 0 12px #fff; transform: scale(1.4); }
+        .dot.active { background: #fff; box-shadow: 0 0 12px #fff; transform: scale(1.3); }
         .dot.found { background: #444; }
 
-        /* Intro Screen */
         #intro {
             position: fixed;
             inset: 0;
@@ -141,27 +139,21 @@
             justify-content: center;
             text-align: center;
             padding: 30px;
-            transition: opacity 2s ease;
+            transition: opacity 1.5s ease;
         }
 
         .start-btn {
             margin-top: 40px;
-            padding: 14px 38px;
+            padding: 14px 40px;
             border: 1px solid #333;
             font-size: 0.55rem;
             letter-spacing: 0.5em;
             text-transform: uppercase;
             color: #666;
             background: transparent;
-            transition: color 0.3s, border-color 0.3s;
-        }
-        
-        .start-btn:active {
-            color: #fff;
-            border-color: #fff;
         }
 
-        /* Final Door Perspective */
+        /* Final Door */
         #final-door {
             position: fixed;
             top: 50%;
@@ -169,7 +161,7 @@
             transform: translate(-50%, -50%) perspective(800px) rotateY(-35deg);
             width: 55px;
             height: 90px;
-            border: 1px solid rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
             background: linear-gradient(90deg, rgba(255,255,255,0.06) 0%, transparent 100%);
             z-index: 5;
             opacity: 0;
@@ -192,7 +184,7 @@
             color: #222;
             z-index: 100;
             pointer-events: none;
-            transition: opacity 1s;
+            transition: opacity 0.5s;
         }
 
         .reading #hint { opacity: 0; }
@@ -255,6 +247,7 @@
         let fragmentsFound = [];
         let isTouching = false;
         let dpr = 1;
+        let activeTimeout = null;
 
         // Maze Geometry (Normalized)
         const walls = [
@@ -284,10 +277,6 @@
             canvas.style.width = window.innerWidth + 'px';
             canvas.style.height = window.innerHeight + 'px';
             ctx.scale(dpr, dpr);
-            
-            // Adjust player target if it was near an edge
-            player.targetX = Math.min(player.targetX, window.innerWidth);
-            player.targetY = Math.min(player.targetY, window.innerHeight);
         }
 
         function createHUD() {
@@ -299,23 +288,30 @@
                 dot.id = `dot-${i}`;
                 dot.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (gameState === 'playing' || gameState === 'reading') teleportTo(i);
+                    e.preventDefault();
+                    if (gameState !== 'intro') jumpTo(i);
                 });
                 nav.appendChild(dot);
             });
         }
 
-        function teleportTo(index) {
+        function jumpTo(index) {
+            // Cancel current reading if any
+            if (activeTimeout) clearTimeout(activeTimeout);
+            
             const target = story[index];
             player.targetX = target.pos.x * window.innerWidth;
             player.targetY = target.pos.y * window.innerHeight;
+            player.x = player.targetX;
+            player.y = player.targetY;
             
-            // Force reset if was reading
-            if (gameState === 'reading') {
-                document.getElementById('content').classList.remove('visible');
-                body.classList.remove('reading');
-                gameState = 'playing';
-            }
+            // Immediately show fragment
+            document.getElementById('content').classList.remove('visible');
+            body.classList.remove('reading');
+            gameState = 'playing';
+            
+            // Give a tiny delay for visual transition
+            setTimeout(() => showFragment(index, true), 50);
         }
 
         function startJourney() {
@@ -326,8 +322,8 @@
             }, 1000);
         }
 
-        function showFragment(index) {
-            if (fragmentsFound.includes(index)) return;
+        function showFragment(index, force = false) {
+            if (fragmentsFound.includes(index) && !force) return;
             
             gameState = 'reading';
             body.classList.add('reading');
@@ -338,15 +334,19 @@
             
             document.getElementById('content').classList.add('visible');
             document.getElementById(`dot-${index}`).classList.add('found');
-            document.getElementById(`dot-${index}`).classList.remove('active');
+            
+            // Update active state in dots
+            document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+            document.getElementById(`dot-${index}`).classList.add('active');
 
             const isFinal = index === story.length - 1;
             const displayTime = isFinal ? 9999999 : 6000;
 
-            setTimeout(() => {
+            if (activeTimeout) clearTimeout(activeTimeout);
+            activeTimeout = setTimeout(() => {
                 if (isFinal) return;
                 document.getElementById('content').classList.remove('visible');
-                fragmentsFound.push(index);
+                if (!fragmentsFound.includes(index)) fragmentsFound.push(index);
                 
                 if (fragmentsFound.length === story.length) {
                     gameState = 'home';
@@ -355,18 +355,19 @@
                     gameState = 'playing';
                     body.classList.remove('reading');
                 }
+                activeTimeout = null;
             }, displayTime);
         }
 
-        const handleDown = (e) => {
+        const handleInputStart = (e) => {
             if (gameState !== 'playing') return;
             isTouching = true;
             updateTarget(e);
         };
-        const handleMove = (e) => {
+        const handleInputMove = (e) => {
             if (isTouching) updateTarget(e);
         };
-        const handleUp = () => {
+        const handleInputEnd = () => {
             isTouching = false;
         };
 
@@ -377,19 +378,19 @@
             player.targetY = clientY;
         }
 
-        window.addEventListener('mousedown', handleDown);
-        window.addEventListener('mousemove', handleMove);
-        window.addEventListener('mouseup', handleUp);
+        // Unified Input Listeners
+        window.addEventListener('mousedown', handleInputStart);
+        window.addEventListener('mousemove', handleInputMove);
+        window.addEventListener('mouseup', handleInputEnd);
         window.addEventListener('touchstart', (e) => { 
             if (e.target.closest('#nav-bar')) return;
-            e.preventDefault(); 
-            handleDown(e); 
-        }, {passive: false});
+            handleInputStart(e); 
+        }, {passive: true});
         window.addEventListener('touchmove', (e) => { 
-            e.preventDefault(); 
-            handleMove(e); 
-        }, {passive: false});
-        window.addEventListener('touchend', handleUp);
+            if (e.target.closest('#nav-bar')) return;
+            handleInputMove(e); 
+        }, {passive: true});
+        window.addEventListener('touchend', handleInputEnd);
 
         function animate() {
             const w = window.innerWidth;
@@ -422,33 +423,28 @@
                         const wy = wall.y * h;
                         const ww = wall.w * w;
                         const wh = wall.h * h;
-                        
-                        const centerX = wx + ww/2;
-                        const centerY = wy + wh/2;
-                        const dist = Math.hypot(player.x - centerX, player.y - centerY);
-                        if (dist < player.radius + 150) {
-                            ctx.strokeRect(wx, wy, ww, wh);
-                        }
+                        const dist = Math.hypot(player.x - (wx + ww/2), player.y - (wy + wh/2));
+                        if (dist < player.radius + 100) ctx.strokeRect(wx, wy, ww, wh);
                     });
                 }
 
                 story.forEach((s, i) => {
-                    if (fragmentsFound.includes(i)) return;
-                    
                     const ex = s.pos.x * w;
                     const ey = s.pos.y * h;
-                    const dist = Math.hypot(player.x - ex, player.y - ey);
                     
-                    const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
-                    ctx.beginPath();
-                    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(255,255,255,${0.05 + pulse * 0.2})`;
-                    ctx.fill();
+                    if (!fragmentsFound.includes(i)) {
+                        const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
+                        ctx.beginPath();
+                        ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255,255,255,${0.05 + pulse * 0.2})`;
+                        ctx.fill();
 
-                    // Collision (Mobile friendly radius)
-                    const hitRadius = window.innerWidth < 768 ? 35 : 25;
-                    if (dist < hitRadius && gameState === 'playing' && i === fragmentsFound.length) {
-                        showFragment(i);
+                        const hitRadius = window.innerWidth < 768 ? 40 : 25;
+                        const dist = Math.hypot(player.x - ex, player.y - ey);
+                        
+                        if (dist < hitRadius && gameState === 'playing' && i === fragmentsFound.length) {
+                            showFragment(i);
+                        }
                     }
                     
                     if (i === fragmentsFound.length) {
@@ -461,9 +457,15 @@
             requestAnimationFrame(animate);
         }
 
-        window.addEventListener('resize', resize);
+        window.addEventListener('resize', () => {
+            resize();
+            player.x = window.innerWidth / 2;
+            player.y = window.innerHeight / 2;
+            player.targetX = player.x;
+            player.targetY = player.y;
+        });
+        
         init();
-
     </script>
 </body>
 </html>
